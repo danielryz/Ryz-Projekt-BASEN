@@ -48,22 +48,6 @@ System zarządza użytkownikami oraz zasobami w kompleksie basenowym, zapewniaj�
 
 ## Testy
 
-### Test 1: Przestrzeganie limitów wiekowych
-- Symulacja kilku użytkowników o różnym wieku próbujących wejść na basen:
-  - Osoby niepełnoletnie próbują wejść na basen olimpijski (oczekiwany wynik: brak dostępu).
-  - Dzieci bez opiekunów próbują wejść do brodzika (oczekiwany wynik: brak dostępu).
-
-### Test 2: Priorytet dla VIP
-- Test dla sytuacji, w której pojawia się kolejka użytkowników, a osoba z karnetem VIP omija kolejkę.
-
-### Test 3: Sygnały ratownika
-- Symulacja sygnału do opuszczenia basenu rekreacyjnego, weryfikacja czy wszyscy opuszczają obszar i przenoszą się na inne baseny lub oczekują.
-
-### Test 4: Kontrola średniej wieku na basenie rekreacyjnym
-- Dodanie użytkowników do basenu rekreacyjnego w sposób przekraczający średnią wieku (oczekiwany wynik: odmowa wstępu kolejnych użytkowników).
-
-### Test 5: Zamknięcie kompleksu
-- Symulacja pełnego zamknięcia kompleksu w celu wymiany wody i ponowne otwarcie (oczekiwany wynik: nikt nie przebywa w kompleksie podczas zamknięcia).
 
 ---
 
