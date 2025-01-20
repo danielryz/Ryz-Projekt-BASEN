@@ -51,7 +51,14 @@ System zarządza użytkownikami oraz zasobami w kompleksie basenowym, zapewniaj�
 
 
 ---
-
+## Konfiguracja Programu
+**Pobieranie**:
+   Pobierz pliki main.c, kasjer.c, ratownik.c, klient.c oraz Makefile do jednego folderu.
+**Kompilacja**:
+   - Otwórz terminal przejdź w terminalu do lokalizacji pobranych plików za pomocą cd sciezka/do/folderu_z_plikami
+   - Wpisz make aby skompilować program.
+**Uruchomienie**:
+   Wpisz w terminalu ./main aby uruchomić
 ## Link do Repozytorium GitHub
 [Repozytorium projektu na GitHub](https://github.com/danielryz/Ryz-Projekt-BASEN)
 
