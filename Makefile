@@ -1,28 +1,25 @@
 # Makefile dla projektu Basen
 
 CC = gcc
-CFLAGS = -Wall -Wextra -pedantic -std=c11
+CFLAGS = -pthread
 
 # Lista programów do skompilowania
-TARGETS = main ratownik kasjer klient
+TARGETS = basen ratownik kasjer klient
 
 all: $(TARGETS)
 
-main: main.o
-	$(CC) $(CFLAGS) -o main main.o
+basen:
+	$(CC) $(CFLAGS) -o basen basen.c
 
-ratownik: ratownik.o
-	$(CC) $(CFLAGS) -o ratownik ratownik.o
+ratownik:
+	$(CC) $(CFLAGS) -o ratownik ratownik.c
 
-kasjer: kasjer.o
-	$(CC) $(CFLAGS) -o kasjer kasjer.o
+kasjer:
+	$(CC) $(CFLAGS) -o kasjer kasjer.c
 
 klient: klient.o
-	$(CC) $(CFLAGS) -o klient klient.o
-
-%.o: %.c
-	$(CC) $(CFLAGS) -c $<
+	$(CC) $(CFLAGS) -o klient klient.c
 
 clean:
-	rm -f *.o $(TARGETS)
+	rm -f $(TARGETS)
 
