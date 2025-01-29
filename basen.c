@@ -114,14 +114,14 @@ int main(int argc, char* argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    // Pamiec wspolna (dla DaneOsoby)
+    // Pamięć wspólna (dla DaneOsoby)
     shm_id_1 = shmget(klucz, sizeof(DaneOsoby), 0600 | IPC_CREAT);
     if (shm_id_1 == -1) {
         perror("shmget1 - glowny");
         exit(EXIT_FAILURE);
     }
 
-    // Pamiec wspolna dla czasu
+    // Pamięć wspólna dla czasu
     shm_id_2 = shmget(klucz2, sizeof(int), 0600 | IPC_CREAT);
     if (shm_id_2 == -1) {
         perror("shmget2 - glowny");
@@ -136,7 +136,7 @@ int main(int argc, char* argv[]) {
     }
     *((int*)wsp_czas) = 0; // start 10:00 = 0
 
-    // Segment pamieci dla BasenyData
+    // Segment pamięci dla BasenyData
     shm_id_basen = shmget(klucz + 10, sizeof(BasenyData), 0600 | IPC_CREAT);
     if (shm_id_basen == -1) {
         perror("shmget3 - basenyData");
@@ -219,7 +219,7 @@ int main(int argc, char* argv[]) {
     printf(RED " Klienci PID=%d, kasjer PID=%d, ratownicy PID=%d " RESET "\n\n",
         pid_klienci, pid_kasjer, pid_ratownicy);
 
-    // Watek sterowania czasem
+    // Wątek sterowania czasem
     if (pthread_create(&th_time, NULL, steruj_czasem, NULL) != 0) {
         perror("pthread_create - steruj_czasem");
         exit(EXIT_FAILURE);
