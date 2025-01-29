@@ -47,20 +47,22 @@ System zarządza użytkownikami oraz zasobami w kompleksie basenowym, zapewniaj�
 ---
 
 ## Testy
-
-
+   -Test 1 sleepy zakomentowane
+   -Test 2 zabicie procesu kasjera
+   -Test 3 Usunieęcie plików FIFO w trakcie działania
+   -Test 4 Zmiana obsługi semaforów np. w ratowniku
 
 ---
 ## Konfiguracja Programu
 **Pobieranie**:
-   Pobierz pliki basen.c, kasjer.c, ratownik.c, klient.c, narzedzia.c, naglowki.h oraz Makefile do jednego folderu.
+   Pobierz pliki basen.c, kasjer.c, ratownik.c, klient.c, funkcje.c, struktury.h oraz Makefile do jednego folderu.
    
 **Kompilacja**:
    - Otwórz terminal przejdź w terminalu do lokalizacji pobranych plików za pomocą cd sciezka/do/folderu_z_plikami .
    - Wpisz make aby skompilować program.
 
 **Uruchomienie**:
-   Wpisz w terminalu ./basen aby uruchomić.
+   Wpisz w terminalu make run lub ./basen Pojemność_Olimpijski(8) Pojemność_Rekreacji(16) Pojemność_Brodzika(10) Sekundy_Symulacji(w microsekundach:5000): (./basen 15 20 18 2500) aby uruchomić. (w nawiasch defaultowe zmienne)
 
 ## Link do Repozytorium GitHub
 [Repozytorium projektu na GitHub](https://github.com/danielryz/Ryz-Projekt-BASEN)
