@@ -1,6 +1,7 @@
-// kasjer.c
-#include "naglowki.h"
-#include "narzedzia.c"
+//kasjer.c
+
+#include "struktury.h"
+#include "funkcje.c"
 
 #include <sys/shm.h>
 #include <sys/sem.h>
@@ -20,7 +21,7 @@ static void* watek_vip(void*);
 static void* watek_przerwa(void*);
 
 char* adr_czas;
-char    buf_godz[16];
+char  buf_godz[16];
 DaneOsoby* wsp_dane;
 pthread_t th_vipy, th_zamkniecie;
 pthread_mutex_t mut_godz_wyj;
@@ -29,23 +30,39 @@ volatile bool global_zamkniecie;
 int ostatni_wpuszczony;
 key_t klucz;
 
-int main() {
-    signal(SIGINT, obsluga_sygnalu_kasjer);
-    signal(SIGTSTP, SIG_DFL);
+int main(int argc, char* argv[]) {
 
-    srand(time(NULL));
-
-    printf("<<Kasjer>> Rozpoczeto prace kasjera.\n");
-
-    klucz = ftok(".", 51);
-    if (klucz == -1) {
-        perror("ftok 51");
+    if (argc < 5) {
+        fprintf(stderr, "Błąd: Brak argumentów! Oczekiwano: POJ_OLIMPIJKA POJ_REKREACJA POJ_BRODZIK SEK_SYMULACJI\n");
         exit(EXIT_FAILURE);
     }
 
-    key_t klucz_czas = ftok(".", 52);
+    // Konwersja argumentow na liczby
+    POJ_OLIMPIJKA = atoi(argv[1]);
+    POJ_REKREACJA = atoi(argv[2]);
+    POJ_BRODZIK = atoi(argv[3]);
+    SEK_SYMULACJI = atoi(argv[4]);
+
+    printf("Proces %s: Otrzymano POJ_OLIMPIJKA=%d, POJ_REKREACJA=%d, POJ_BRODZIK=%d, SEK_SYMULACJI=%d\n",
+        argv[0], POJ_OLIMPIJKA, POJ_REKREACJA, POJ_BRODZIK, SEK_SYMULACJI);
+
+
+    signal(SIGINT, obsluga_sygnalu_kasjer);
+    signal(SIGTSTP, SIG_DFL);
+
+    srand(time(NULL)); //  dla losowosci
+
+    printf(YELLOW " <<Kasjer>> Rozpoczeto prace kasjera. " RESET "\n");
+
+    klucz = ftok(".", 100);
+    if (klucz == -1) {
+        perror("ftok 100");
+        exit(EXIT_FAILURE);
+    }
+
+    key_t klucz_czas = ftok(".", 200);
     if (klucz_czas == -1) {
-        perror("ftok 52");
+        perror("ftok 200");
         exit(EXIT_FAILURE);
     }
 
@@ -90,56 +107,66 @@ int main() {
 
     DaneOsoby temp;
     while (1) {
+        // czekamy na semafor 2 – klient wysyla DaneOsoby
         opusc_semafor(sem_id, 2);
+
         memcpy(&temp, wsp_dane, sizeof(DaneOsoby));
 
         // Sprawdzamy godzine i status przerwy
-        if ((*(int*)adr_czas) > CALA_DOBA_SYM - GODZINA_SYM || global_zamkniecie) {
+        if ((*(int*)adr_czas) > (CALY_CZAS_SYM - GODZINA_SYM) || global_zamkniecie) {
             // Po 21:00 lub przerwa
             temp.wpuszczony = false;
             formatuj_czas(*(int*)adr_czas, buf_godz);
-            printf("[%s] (KASJER) Klient PID=%d przybyl za pozno albo trafil na zamkniecie.\n",
+            printf("[%s] " BG_YELLOW BLACK " (KASJER): " RESET YELLOW
+                " Klient PID=%d - zamkniete/przerwa. " RESET "\n",
                 buf_godz, temp.pid);
         }
         else {
             // Normalna sprzedaz biletow
-            if ((temp.wiek > 18 || temp.wiek < 10) && temp.kasa >= 40) {
+            if ((temp.wiek > 18 || temp.wiek < 10) && temp.kasa >= 30) {
                 temp.kasa -= 30;
                 temp.wpuszczony = true;
                 temp.czas_wyjscia = (*(int*)adr_czas) + GODZINA_SYM;
 
                 blokada_mutex(&mut_godz_wyj);
                 ostatni_wpuszczony = temp.czas_wyjscia;
-                odblokada_mutex(&mut_godz_wyj);
+                odblokowanie_mutex(&mut_godz_wyj);
 
                 formatuj_czas(*(int*)adr_czas, buf_godz);
-                printf("[%s] (KASJER) Sprzedano bilet normalny (PID=%d)\n", buf_godz, temp.pid);
+                printf("[%s] " BG_YELLOW BLACK " (KASJER): " RESET YELLOW
+                    " Sprzedano bilet normalny (PID=%d). " RESET "\n",
+                    buf_godz, temp.pid);
             }
-            else if (temp.kasa >= 15) {
-                temp.kasa -= 15;
+            else if (temp.kasa >= 20) {
+                temp.kasa -= 20;
                 temp.wpuszczony = true;
                 temp.czas_wyjscia = (*(int*)adr_czas) + GODZINA_SYM;
 
                 blokada_mutex(&mut_godz_wyj);
                 ostatni_wpuszczony = temp.czas_wyjscia;
-                odblokada_mutex(&mut_godz_wyj);
+                odblokowanie_mutex(&mut_godz_wyj);
 
                 formatuj_czas(*(int*)adr_czas, buf_godz);
-                printf("[%s] (KASJER) Sprzedano bilet ulgowy (PID=%d)\n", buf_godz, temp.pid);
+                printf("[%s] " BG_YELLOW BLACK " (KASJER): " RESET YELLOW
+                    " Sprzedano bilet ulgowy (PID=%d). " RESET "\n",
+                    buf_godz, temp.pid);
             }
             else {
                 temp.wpuszczony = false;
                 formatuj_czas(*(int*)adr_czas, buf_godz);
-                printf("[%s] (KASJER) Klient PID=%d ma za malo pieniedzy, niestety.\n",
+                printf("[%s] " BG_YELLOW BLACK " (KASJER): " RESET YELLOW
+                    " Klient PID=%d - za malo pieniedzy. " RESET "\n",
                     buf_godz, temp.pid);
             }
         }
 
         memcpy(wsp_dane, &temp, sizeof(DaneOsoby));
-
         formatuj_czas((*(int*)adr_czas), buf_godz);
-        printf("[%s] (KASJER) Zakonczono obsluge PID=%d.\n", buf_godz, temp.pid);
+        printf("[%s] " BG_YELLOW BLACK " (KASJER): " RESET YELLOW
+            " Zakonczono obsluge PID=%d. " RESET "\n",
+            buf_godz, temp.pid);
 
+        // zwalniamy semafor 3 – klient moze isc dalej
         podnies_semafor(sem_id, 3);
     }
 
@@ -172,17 +199,17 @@ static void sprzatanie_kasjera() {
 
 static void obsluga_sygnalu_kasjer(int sig) {
     if (sig == SIGINT) {
-        printf("<<Kasjer>> Otrzymano SIGINT, koncze prace kasjera.\n");
+        printf(YELLOW " <<Kasjer>> Otrzymano SIGINT, koncze prace kasjera. " RESET "\n");
         sprzatanie_kasjera();
         exit(0);
     }
 }
 
-// Watek obslugujacy klientow VIP
+// Watek VIP
 static void* watek_vip(void* arg) {
     (void)arg;
 
-    printf("<<Kasjer>> Watek VIP dziala.\n");
+    printf(YELLOW " <<Kasjer>> Watek VIP dziala. " RESET "\n");
 
     int msqid_vip = msgget(klucz, 0600);
     if (msqid_vip == -1) {
@@ -202,10 +229,10 @@ static void* watek_vip(void* arg) {
 
         // Odpowiedz
         kom.mtype = kom.pid_osoby;
-        if (rand() % 30 == 16) {
+        if (rand() % 20 == 10) {
             strcpy(kom.opis, "karnet niewazny");
         }
-        else if ((*(int*)adr_czas) > CALA_DOBA_SYM - GODZINA_SYM || global_zamkniecie) {
+        else if ((*(int*)adr_czas) > CALY_CZAS_SYM - GODZINA_SYM || global_zamkniecie) {
             strcpy(kom.opis, "kasa zamknieta");
         }
         else {
@@ -214,7 +241,7 @@ static void* watek_vip(void* arg) {
 
             blokada_mutex(&mut_godz_wyj);
             ostatni_wpuszczony = kom.wyjscie_czas;
-            odblokada_mutex(&mut_godz_wyj);
+            odblokowanie_mutex(&mut_godz_wyj);
         }
 
         if (msgsnd(msqid_vip, &kom, sizeof(kom) - sizeof(long), 0) == -1) {
@@ -223,13 +250,14 @@ static void* watek_vip(void* arg) {
         }
 
         formatuj_czas((*(int*)adr_czas), buf_godz);
-        printf("[%s] (KASJER) Obsluzono VIP PID=%d.\n", buf_godz, kom.pid_osoby);
+        printf("[%s] " BG_YELLOW BLACK " (KASJER): " RESET YELLOW
+            " Obsluzono VIP PID=%d. " RESET "\n", buf_godz, kom.pid_osoby);
     }
 
     return NULL;
 }
 
-// Watek przerwy, zamyka osrodek po 4h od startu
+// Watek przerwy, tu zrobimy przerwe w losowym momencie np. 3–6h
 static void* watek_przerwa(void* arg) {
     (void)arg;
 
@@ -237,16 +265,17 @@ static void* watek_przerwa(void* arg) {
     pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
 
     int czas_lokalny;
-    // czeka do 14:00
-    while ((czas_lokalny = (*(int*)adr_czas)) < 4 * GODZINA_SYM) {
+    // Losowy moment startu przerwy: 3–6 h od startu
+    int czas_przerwy = (rand() % 4 + 3) * GODZINA_SYM; // 3..6h
+    while ((czas_lokalny = (*(int*)adr_czas)) < czas_przerwy) {
         pthread_testcancel();
     }
-
     opusc_semafor(sem_id, 4);
     global_zamkniecie = true;
 
     formatuj_czas((*(int*)adr_czas), buf_godz);
-    printf("[%s] (KASJER) Nastapila przerwa! Czekamy az wszyscy wyjda...\n", buf_godz);
+    printf("[%s] " BG_YELLOW BLACK " (KASJER): " RESET YELLOW
+        " Nastapila przerwa! Czekamy az wszyscy wyjda... " RESET "\n", buf_godz);
 
     // czekamy, az wyjdzie ostatni
     while ((czas_lokalny = (*(int*)adr_czas)) < ostatni_wpuszczony) {
@@ -254,7 +283,8 @@ static void* watek_przerwa(void* arg) {
     }
 
     formatuj_czas((*(int*)adr_czas), buf_godz);
-    printf("[%s] (KASJER) Osrodek pusty, przerwa trwa 60 minut.\n", buf_godz);
+    printf("[%s] " BG_YELLOW BLACK " (KASJER): " RESET YELLOW
+        " Osrodek pusty, przerwa trwa 60 minut. " RESET "\n", buf_godz);
 
     // 1h przerwy
     while ((czas_lokalny = (*(int*)adr_czas)) < (ostatni_wpuszczony + GODZINA_SYM)) {
@@ -262,11 +292,11 @@ static void* watek_przerwa(void* arg) {
     }
 
     formatuj_czas((*(int*)adr_czas), buf_godz);
-    printf("[%s] (KASJER) Koniec przerwy, otwieramy ponownie!\n", buf_godz);
+    printf("[%s] " BG_YELLOW BLACK " (KASJER): " RESET YELLOW
+        " Koniec przerwy, otwieramy ponownie! " RESET "\n", buf_godz);
 
     global_zamkniecie = false;
     podnies_semafor(sem_id, 4);
 
     return NULL;
 }
-
