@@ -46,7 +46,7 @@ System zarządza użytkownikami oraz zasobami w kompleksie basenowym, zapewniaj�
 
 ---
 
-## Testy
+## Testy:
    -Test 1 sleepy zakomentowane
    -Test 2 zabicie procesu kasjera
    -Test 3 Usunieęcie plików FIFO w trakcie działania
@@ -58,7 +58,7 @@ System zarządza użytkownikami oraz zasobami w kompleksie basenowym, zapewniaj�
    Pobierz pliki basen.c, kasjer.c, ratownik.c, klient.c, funkcje.c, struktury.h oraz Makefile do jednego folderu.
    
 **Kompilacja**:
-   - Otwórz terminal przejdź w terminalu do lokalizacji pobranych plików za pomocą cd sciezka/do/folderu_z_plikami .
+   - Otwórz terminal przejdź w terminalu do lokalizacji pobranych plików za pomocą cd sciezka/do/folderu_z_plikami.
    - Wpisz make aby skompilować program.
 
 **Uruchomienie**:
