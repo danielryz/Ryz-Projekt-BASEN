@@ -1,6 +1,7 @@
-// ratownik.c
-#include "naglowki.h"
-#include "narzedzia.c"
+//ratownik.c
+
+#include "struktury.h"
+#include "funkcje.c"
 
 #include <sys/shm.h>
 #include <sys/sem.h>
@@ -20,39 +21,69 @@ static void* wpuszczanie_rek(void*);
 static void* wpuszczanie_brodz(void*);
 static void* wychodzenie(void*);
 static void* sygnaly_ratownika(void*);
+static void sprzatanie_ratownika();
 static void obsluga_sig(int);
+
+BasenyData* gl_basen;
 
 pid_t pid_nadz1, pid_nadz2, pid_nadz3;
 char  buf_cz[16];
 char* adr_czas;
 pthread_mutex_t mut_olimp, mut_rek, mut_brodz;
 pthread_t t_wp, t_wy, t_sig;
-KomunikatNadzoru msg_nadz;
 int msq_clifegu, sem_id;
 volatile bool flaga_przyjec, flaga_zabron_wstepu;
-int ktory_basen_global;
+int ktory_basen_global = 0;
 
-int main() {
+int main(int argc, char* argv[]) {
+
+    if (argc < 5) {
+        fprintf(stderr, "Błąd: Brak argumentów! Oczekiwano: POJ_OLIMPIJKA POJ_REKREACJA POJ_BRODZIK SEK_SYMULACJI\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // Konwersja argumentów na liczby
+    POJ_OLIMPIJKA = atoi(argv[1]);
+    POJ_REKREACJA = atoi(argv[2]);
+    POJ_BRODZIK = atoi(argv[3]);
+    SEK_SYMULACJI = atoi(argv[4]);
+
+    printf("Proces ratownik: Otrzymano POJ_OLIMPIJKA=%d, POJ_REKREACJA=%d, POJ_BRODZIK=%d, SEK_SYMULACJI=%d\n",
+        POJ_OLIMPIJKA, POJ_REKREACJA, POJ_BRODZIK, SEK_SYMULACJI);
+
     signal(SIGINT, obsluga_sig);
     signal(SIGTSTP, SIG_DFL);
 
+    // Tworzymy grupę procesów dla ratowników
     if (setpgid(0, 0) == -1) {
         perror("setpgid ratownik main");
         exit(EXIT_FAILURE);
     }
 
-    printf("<<Ratownicy>> Start procesu glownego ratownikow.\n");
+    printf(BLUE " <<Ratownicy>> Start procesu glownego ratownikow. " RESET "\n");
     flaga_zabron_wstepu = false;
     flaga_przyjec = true;
 
-    key_t klucz = ftok(".", 51);
+    key_t klucz = ftok(".", 100);
     if (klucz == -1) {
         perror("ftok - ratownik");
         exit(EXIT_FAILURE);
     }
-    key_t klucz_czas = ftok(".", 52);
+    key_t klucz_czas = ftok(".", 200);
     if (klucz_czas == -1) {
         perror("ftok - ratownik czas");
+        exit(EXIT_FAILURE);
+    }
+
+    // Pamięć wspólna basen
+    int shm_id_basen = shmget(klucz + 10, sizeof(BasenyData), 0600);
+    if (shm_id_basen == -1) {
+        perror("shmget basen data - ratownik");
+        exit(EXIT_FAILURE);
+    }
+    gl_basen = (BasenyData*)shmat(shm_id_basen, NULL, 0);
+    if (gl_basen == (void*)-1) {
+        perror("shmat basen data - ratownik");
         exit(EXIT_FAILURE);
     }
 
@@ -79,34 +110,31 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-    // Tworzymy 3 procesy ratownicze
+    // Tworzymy 3 procesy (ratownicy)
     pid_nadz1 = fork();
     if (pid_nadz1 < 0) {
         perror("fork rat1");
         exit(EXIT_FAILURE);
     }
     else if (pid_nadz1 == 0) {
-        srand(getpid());
+        srand(getpid() ^ time(NULL));      // aby sygnaly byly bardziej losowe
+        usleep(rand() % 500000);           // lekkie opoznienie startu
         signal(SIGTSTP, SIG_DFL);
         if (setpgid(0, getppid()) == -1) {
             perror("setpgid rat1");
-            exit(EXIT_FAILURE);
         }
         ktory_basen_global = 1;
-
-        int tab_olimp[POJ_OLIMPIJKA + 1];
-        memset(tab_olimp, 0, sizeof(tab_olimp));
 
         int st = pthread_mutex_init(&mut_olimp, NULL);
         sprawdz_err(st, "mutex_init olimp");
 
-        st = pthread_create(&t_wp, NULL, wpuszczanie_olimp, tab_olimp);
+        st = pthread_create(&t_wp, NULL, wpuszczanie_olimp, gl_basen->tab_olimp);
         sprawdz_err(st, "pthread_create wpuszczanie olimp");
 
-        st = pthread_create(&t_sig, NULL, sygnaly_ratownika, tab_olimp);
+        st = pthread_create(&t_sig, NULL, sygnaly_ratownika, gl_basen->tab_olimp);
         sprawdz_err(st, "pthread_create sygnaly olimp");
 
-        st = pthread_create(&t_wy, NULL, wychodzenie, tab_olimp);
+        st = pthread_create(&t_wy, NULL, wychodzenie, gl_basen->tab_olimp);
         sprawdz_err(st, "pthread_create wychodzenie olimp");
 
         pthread_join(t_sig, NULL);
@@ -124,27 +152,24 @@ int main() {
             exit(EXIT_FAILURE);
         }
         else if (pid_nadz2 == 0) {
-            srand(getpid());
+            srand(getpid() ^ time(NULL));
+            usleep(rand() % 500000);
             signal(SIGTSTP, SIG_DFL);
             if (setpgid(0, getppid()) == -1) {
                 perror("setpgid rat2");
-                exit(EXIT_FAILURE);
             }
             ktory_basen_global = 2;
-
-            int tab_rek[2][POJ_REKREACJA + 1];
-            memset(tab_rek, 0, sizeof(tab_rek));
 
             int st = pthread_mutex_init(&mut_rek, NULL);
             sprawdz_err(st, "mutex_init rek");
 
-            st = pthread_create(&t_wp, NULL, wpuszczanie_rek, tab_rek);
+            st = pthread_create(&t_wp, NULL, wpuszczanie_rek, gl_basen->tab_rek);
             sprawdz_err(st, "pthread_create wpuszczanie rek");
 
-            st = pthread_create(&t_sig, NULL, sygnaly_ratownika, tab_rek);
+            st = pthread_create(&t_sig, NULL, sygnaly_ratownika, gl_basen->tab_rek);
             sprawdz_err(st, "pthread_create sygnaly rek");
 
-            st = pthread_create(&t_wy, NULL, wychodzenie, tab_rek);
+            st = pthread_create(&t_wy, NULL, wychodzenie, gl_basen->tab_rek);
             sprawdz_err(st, "pthread_create wychodzenie rek");
 
             pthread_join(t_sig, NULL);
@@ -163,27 +188,24 @@ int main() {
                 exit(EXIT_FAILURE);
             }
             else if (pid_nadz3 == 0) {
-                srand(getpid());
+                srand(getpid() ^ time(NULL));
+                usleep(rand() % 500000);
                 signal(SIGTSTP, SIG_DFL);
                 if (setpgid(0, getppid()) == -1) {
                     perror("setpgid rat3");
-                    exit(EXIT_FAILURE);
                 }
                 ktory_basen_global = 3;
-
-                int tab_brodz[POJ_BRODZIK + 1];
-                memset(tab_brodz, 0, sizeof(tab_brodz));
 
                 int st = pthread_mutex_init(&mut_brodz, NULL);
                 sprawdz_err(st, "mutex_init brodz");
 
-                st = pthread_create(&t_wp, NULL, wpuszczanie_brodz, tab_brodz);
+                st = pthread_create(&t_wp, NULL, wpuszczanie_brodz, gl_basen->tab_brodz);
                 sprawdz_err(st, "pthread_create wpuszczanie brodz");
 
-                st = pthread_create(&t_sig, NULL, sygnaly_ratownika, tab_brodz);
+                st = pthread_create(&t_sig, NULL, sygnaly_ratownika, gl_basen->tab_brodz);
                 sprawdz_err(st, "pthread_create sygnaly brodz");
 
-                st = pthread_create(&t_wy, NULL, wychodzenie, tab_brodz);
+                st = pthread_create(&t_wy, NULL, wychodzenie, gl_basen->tab_brodz);
                 sprawdz_err(st, "pthread_create wychodzenie brodz");
 
                 pthread_join(t_sig, NULL);
@@ -201,35 +223,63 @@ int main() {
     waitpid(pid_nadz3, NULL, 0);
 
     shmdt(adr_czas);
+    shmdt(gl_basen);
     return 0;
 }
 
-static void obsluga_sig(int s) {
-    flaga_przyjec = false;
-    int r;
-    if ((r = pthread_cancel(t_wp)) != 0 && r != ESRCH) {
-        perror("pthread_cancel - t_wp");
-        exit(EXIT_FAILURE);
+static void sprzatanie_ratownika() {
+    int st;
+
+    if (shmdt(adr_czas) == -1) {
+        perror("shmdt - czas");
     }
-    if ((r = pthread_cancel(t_wy)) != 0 && r != ESRCH) {
-        perror("pthread_cancel - t_wy");
-        exit(EXIT_FAILURE);
+    if (shmdt(gl_basen) == -1) {
+        perror("shmdt - basen");
     }
-    if ((r = pthread_cancel(t_sig)) != 0 && r != ESRCH) {
-        perror("pthread_cancel - t_sig");
-        exit(EXIT_FAILURE);
+
+    if ((st = pthread_cancel(t_wp)) != 0 && st != ESRCH) {
+        fprintf(stderr, "pthread_cancel wpuszczanie - kod: %d\n", st);
+    }
+    pthread_join(t_wp, NULL);
+
+    if ((st = pthread_cancel(t_wy)) != 0 && st != ESRCH) {
+        fprintf(stderr, "pthread_cancel wychodzenie - kod: %d\n", st);
+    }
+    pthread_join(t_wy, NULL);
+
+    if ((st = pthread_cancel(t_sig)) != 0 && st != ESRCH) {
+        fprintf(stderr, "pthread_cancel sygnaly - kod: %d\n", st);
+    }
+    pthread_join(t_sig, NULL);
+
+    if (ktory_basen_global == 1) {
+        pthread_mutex_destroy(&mut_olimp);
+    }
+    else if (ktory_basen_global == 2) {
+        pthread_mutex_destroy(&mut_rek);
+    }
+    else if (ktory_basen_global == 3) {
+        pthread_mutex_destroy(&mut_brodz);
+    }
+}
+
+static void obsluga_sig(int sig) {
+    if (sig == SIGINT) {
+        flaga_przyjec = false;
+        printf(BLUE " <<Ratownik>> Otrzymano SIGINT, kończę pracę ratownika. " RESET "\n");
+        sprzatanie_ratownika();
+        exit(0);
     }
 }
 
 static void* wpuszczanie_olimp(void* arg) {
-    int* arr = (int*)arg;
+    int* tab_olimp = (int*)arg;
     KomunikatNadzoru km;
     while (flaga_przyjec) {
         if (msgrcv(msq_clifegu, &km, sizeof(km) - sizeof(long), 3, 0) == -1) {
-            if (errno != EINTR) {
-                perror("msgrcv - rat1");
-                exit(EXIT_FAILURE);
-            }
+            if (errno == EINTR) continue;
+            perror("msgrcv - rat1");
+            exit(EXIT_FAILURE);
         }
         strcpy(km.info, "OK");
         km.mtype = km.pid_osoby;
@@ -241,14 +291,23 @@ static void* wpuszczanie_olimp(void* arg) {
         else if (km.wiek_osoby < 18) {
             strcpy(km.info, "za_mlody_na_olimpijski");
         }
-        else if (arr[0] == POJ_OLIMPIJKA) {
+        else if (tab_olimp[0] == POJ_OLIMPIJKA) {
             strcpy(km.info, "olimp_pelny");
         }
         else {
-            arr[0]++;
-            wstaw_pid(arr, POJ_OLIMPIJKA, km.pid_osoby);
+            tab_olimp[0]++;
+            wstaw_pid(tab_olimp, POJ_OLIMPIJKA, km.pid_osoby);
+
+            // Wizualizacja
+            podnies_semafor(sem_id, 7);
+            wizualizacja_stanu_basenu("Basen Olimpijski",
+                tab_olimp[0], // ilu w środku
+                POJ_OLIMPIJKA,
+                tab_olimp,
+                POJ_OLIMPIJKA + 1);
+            opusc_semafor(sem_id, 7);
         }
-        odblokada_mutex(&mut_olimp);
+        odblokowanie_mutex(&mut_olimp);
 
         if (msgsnd(msq_clifegu, &km, sizeof(km) - sizeof(long), 0) == -1) {
             perror("msgsnd - rat1");
@@ -259,39 +318,48 @@ static void* wpuszczanie_olimp(void* arg) {
 }
 
 static void* wpuszczanie_rek(void* arg) {
-    int(*arr)[POJ_REKREACJA + 1] = (int(*)[POJ_REKREACJA + 1])arg;
+    int(*tab_rek)[MAX_POJ_REKREACJA + 1] = (int(*)[MAX_POJ_REKREACJA + 1])arg;
     KomunikatNadzoru km;
     while (flaga_przyjec) {
         if (msgrcv(msq_clifegu, &km, sizeof(km) - sizeof(long), 4, 0) == -1) {
-            if (errno != EINTR) {
-                perror("msgrcv - rat2");
-                exit(EXIT_FAILURE);
-            }
+            if (errno == EINTR) continue;
+            perror("msgrcv - rat2");
+            exit(EXIT_FAILURE);
         }
         strcpy(km.info, "OK");
         km.mtype = km.pid_osoby;
 
         int nowi = (km.wiek_osoby < 10) ? 2 : 1;
+
         blokada_mutex(&mut_rek);
-        double sr = oblicz_srednia(arr[1], POJ_REKREACJA, km.wiek_osoby + km.wiek_opiekuna);
+        double sr = oblicz_srednia(tab_rek[1], POJ_REKREACJA, km.wiek_osoby + km.wiek_opiekuna);
 
         if (flaga_zabron_wstepu) {
             strcpy(km.info, "wstep_zabroniony");
         }
-        else if (arr[0][0] + nowi > POJ_REKREACJA) {
+        else if (tab_rek[0][0] + nowi > POJ_REKREACJA) {
             strcpy(km.info, "rek_pelny");
         }
         else if (sr > 40) {
             strcpy(km.info, "rek_srednia_zbyt_wysoka");
         }
         else {
-            arr[0][0] += nowi;
-            wstaw_pid_wiek(arr, POJ_REKREACJA, km.pid_osoby, km.wiek_osoby);
+            tab_rek[0][0] += nowi;
+            wstaw_pid_wiek(tab_rek, POJ_REKREACJA, km.pid_osoby, km.wiek_osoby);
             if (km.wiek_opiekuna) {
-                wstaw_pid_wiek(arr, POJ_REKREACJA, km.pid_osoby, km.wiek_opiekuna);
+                wstaw_pid_wiek(tab_rek, POJ_REKREACJA, km.pid_osoby, km.wiek_opiekuna);
             }
+
+            podnies_semafor(sem_id, 7);
+            wizualizacja_stanu_basenu_rek("Basen Rekreacyjny",
+                tab_rek[0][0],
+                POJ_REKREACJA,
+                tab_rek,
+                POJ_REKREACJA + 1,
+                sr);
+            opusc_semafor(sem_id, 7);
         }
-        odblokada_mutex(&mut_rek);
+        odblokowanie_mutex(&mut_rek);
 
         if (msgsnd(msq_clifegu, &km, sizeof(km) - sizeof(long), 0) == -1) {
             perror("msgsnd - rat2");
@@ -302,14 +370,13 @@ static void* wpuszczanie_rek(void* arg) {
 }
 
 static void* wpuszczanie_brodz(void* arg) {
-    int* arr = (int*)arg;
+    int* tab_brodz = (int*)arg;
     KomunikatNadzoru km;
     while (flaga_przyjec) {
         if (msgrcv(msq_clifegu, &km, sizeof(km) - sizeof(long), 5, 0) == -1) {
-            if (errno != EINTR) {
-                perror("msgrcv - rat3");
-                exit(EXIT_FAILURE);
-            }
+            if (errno == EINTR) continue;
+            perror("msgrcv - rat3");
+            exit(EXIT_FAILURE);
         }
         strcpy(km.info, "OK");
         km.mtype = km.pid_osoby;
@@ -321,14 +388,22 @@ static void* wpuszczanie_brodz(void* arg) {
         else if (km.wiek_osoby > 5) {
             strcpy(km.info, "za_stary_na_brodzik");
         }
-        else if (arr[0] == POJ_BRODZIK) {
+        else if (tab_brodz[0] == POJ_BRODZIK) {
             strcpy(km.info, "brodzik_pelny");
         }
         else {
-            arr[0]++;
-            wstaw_pid(arr, POJ_BRODZIK, km.pid_osoby);
+            tab_brodz[0]++;
+            wstaw_pid(tab_brodz, POJ_BRODZIK, km.pid_osoby);
+
+            podnies_semafor(sem_id, 7);
+            wizualizacja_stanu_basenu("  Basen Brodzik ",
+                tab_brodz[0],
+                POJ_BRODZIK,
+                tab_brodz,
+                POJ_BRODZIK + 1);
+            opusc_semafor(sem_id, 7);
         }
-        odblokada_mutex(&mut_brodz);
+        odblokowanie_mutex(&mut_brodz);
 
         if (msgsnd(msq_clifegu, &km, sizeof(km) - sizeof(long), 0) == -1) {
             perror("msgsnd - rat3");
@@ -338,12 +413,12 @@ static void* wpuszczanie_brodz(void* arg) {
     return NULL;
 }
 
+
 static void* wychodzenie(void* arg) {
     int* arr = (int*)arg;
     int  pid_tmp;
-
     char plik_fifo[32];
-    snprintf(plik_fifo, sizeof(plik_fifo), "kana_bas_%d", ktory_basen_global);
+    snprintf(plik_fifo, sizeof(plik_fifo), "kanal_bas_%d", ktory_basen_global);
 
     int fd_fifo = open(plik_fifo, O_RDONLY);
     if (fd_fifo < 0) {
@@ -365,34 +440,37 @@ static void* wychodzenie(void* arg) {
         case 1:
             blokada_mutex(&mut_olimp);
             formatuj_czas(*(int*)adr_czas, buf_cz);
-            printf("[%s] (RATOWNIK OLIMPIJSKI) Klient PID=%d wychodzi.\n", buf_cz, pid_tmp);
+            printf("[%s] " BG_BLUE BLACK " (RATOWNIK OLIMPIJSKI): " RESET BLUE
+                " Klient PID=%d wychodzi. " RESET "\n", buf_cz, pid_tmp);
 
             arr[0]--;
             usun_pid(arr, POJ_OLIMPIJKA, pid_tmp);
-            odblokada_mutex(&mut_olimp);
+            odblokowanie_mutex(&mut_olimp);
             break;
         case 2: {
             blokada_mutex(&mut_rek);
             formatuj_czas(*(int*)adr_czas, buf_cz);
-            printf("[%s] (RATOWNIK REKREACYJNY) Klient PID=%d wychodzi.\n", buf_cz, pid_tmp);
+            printf("[%s] " BG_BLUE BLACK " (RATOWNIK REKREACYJNY): " RESET BLUE
+                " Klient PID=%d wychodzi. " RESET "\n", buf_cz, pid_tmp);
 
-            int(*arr2)[POJ_REKREACJA + 1] = (int(*)[POJ_REKREACJA + 1])arr;
+            int(*arr2)[MAX_POJ_REKREACJA + 1] = (int(*)[MAX_POJ_REKREACJA + 1])arr;
             int ile = zlicz_pid(arr2[0], POJ_REKREACJA, pid_tmp);
             arr2[0][0] -= ile;
             for (int i = 0; i < ile; i++) {
                 usun_pid_wiek(arr2, POJ_REKREACJA, pid_tmp);
             }
-            odblokada_mutex(&mut_rek);
+            odblokowanie_mutex(&mut_rek);
             break;
         }
         case 3:
             blokada_mutex(&mut_brodz);
             formatuj_czas(*(int*)adr_czas, buf_cz);
-            printf("[%s] (RATOWNIK BRODZIK) Klient PID=%d wychodzi.\n", buf_cz, pid_tmp);
+            printf("[%s] " BG_BLUE BLACK " (RATOWNIK BRODZIK): " RESET BLUE
+                " Klient PID=%d wychodzi. " RESET "\n", buf_cz, pid_tmp);
 
             arr[0]--;
             usun_pid(arr, POJ_BRODZIK, pid_tmp);
-            odblokada_mutex(&mut_brodz);
+            odblokowanie_mutex(&mut_brodz);
             break;
         }
     }
@@ -401,19 +479,19 @@ static void* wychodzenie(void* arg) {
     return NULL;
 }
 
-// Watek wysylajacy sygnaly SIGUSR1/SIGUSR2 w pewnych odstepach, wyrzucajac ludzi z basenu
+// Watek wysylajacy sygnaly SIGUSR1/SIGUSR2
 static void* sygnaly_ratownika(void* arg) {
     int* arr = (int*)arg;
     union sigval sig_data;
     sig_data.sival_int = ktory_basen_global;
 
-    while (*(int*)adr_czas < (CALA_DOBA_SYM - 2 * GODZINA_SYM)) {
+    while (*(int*)adr_czas < (CALY_CZAS_SYM - 2 * GODZINA_SYM)) {
         int t_biez, t1, t2, rozn;
         t_biez = *(int*)adr_czas;
         t1 = t_biez + ((rand() % (31 * MINUTA_SYM)) + 30 * MINUTA_SYM);
         rozn = (rand() % (36 * MINUTA_SYM)) + 15 * MINUTA_SYM;
         t2 = t1 + rozn;
-        if (t2 > CALA_DOBA_SYM - 2 * GODZINA_SYM) {
+        if (t2 > CALY_CZAS_SYM - 2 * GODZINA_SYM) {
             continue;
         }
 
@@ -421,7 +499,7 @@ static void* sygnaly_ratownika(void* arg) {
             pthread_testcancel();
         }
         formatuj_czas(*(int*)adr_czas, buf_cz);
-        printf("[%s] (RATOWNIK) Wysylamy SIGUSR1 do basenu #%d\n", buf_cz, ktory_basen_global);
+        printf("[%s] " BG_BLUE BLACK " (RATOWNIK): " RESET BLUE " Wysylamy SIGUSR1 do basenu #%d " RESET "\n", buf_cz, ktory_basen_global);
 
         int rozmiar_basen = (ktory_basen_global == 1 ? POJ_OLIMPIJKA :
             (ktory_basen_global == 2 ? POJ_REKREACJA : POJ_BRODZIK));
@@ -443,7 +521,7 @@ static void* sygnaly_ratownika(void* arg) {
                 }
             }
             arr[0] = 0;
-            odblokada_mutex(&mut_olimp);
+            odblokowanie_mutex(&mut_olimp);
             break;
         case 2: {
             blokada_mutex(&mut_rek);
@@ -461,7 +539,7 @@ static void* sygnaly_ratownika(void* arg) {
                 }
             }
             arr2[0][0] = 0;
-            odblokada_mutex(&mut_rek);
+            odblokowanie_mutex(&mut_rek);
             break;
         }
         case 3:
@@ -478,7 +556,7 @@ static void* sygnaly_ratownika(void* arg) {
                 }
             }
             arr[0] = 0;
-            odblokada_mutex(&mut_brodz);
+            odblokowanie_mutex(&mut_brodz);
             break;
         }
 
@@ -498,7 +576,7 @@ static void* sygnaly_ratownika(void* arg) {
                     }
                 }
             }
-            odblokada_mutex(&mut_olimp);
+            odblokowanie_mutex(&mut_olimp);
             break;
         case 2: {
             blokada_mutex(&mut_rek);
@@ -511,7 +589,7 @@ static void* sygnaly_ratownika(void* arg) {
                     }
                 }
             }
-            odblokada_mutex(&mut_rek);
+            odblokowanie_mutex(&mut_rek);
             break;
         }
         case 3:
@@ -524,16 +602,15 @@ static void* sygnaly_ratownika(void* arg) {
                     }
                 }
             }
-            odblokada_mutex(&mut_brodz);
+            odblokowanie_mutex(&mut_brodz);
             break;
         }
 
         formatuj_czas(*(int*)adr_czas, buf_cz);
-        printf("[%s] (RATOWNIK) Wysylamy SIGUSR2 do basenu #%d, koniec czyszczenia.\n", buf_cz, ktory_basen_global);
+        printf("[%s] " BG_BLUE BLACK " (RATOWNIK): " RESET BLUE " Wysylamy SIGUSR2 do basenu #%d, koniec czyszczenia. " RESET "\n", buf_cz, ktory_basen_global);
 
         flaga_zabron_wstepu = false;
     }
 
     return NULL;
 }
-
