@@ -75,8 +75,14 @@ int main(int argc, char* argv[]) {
         exit(EXIT_FAILURE);
     }
 
+    key_t klucz_basen = ftok(".", 300);
+    if (klucz_basen == -1) {
+        perror("ftok - ratownik basen");
+        exit(EXIT_FAILURE);
+    }
+
     // Pamięć wspólna basen
-    int shm_id_basen = shmget(klucz + 10, sizeof(BasenyData), 0600);
+    int shm_id_basen = shmget(klucz_basen, sizeof(BasenyData), 0600);
     if (shm_id_basen == -1) {
         perror("shmget basen data - ratownik");
         exit(EXIT_FAILURE);
