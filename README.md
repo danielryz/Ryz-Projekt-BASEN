@@ -46,11 +46,11 @@ System zarządza użytkownikami oraz zasobami w kompleksie basenowym, zapewniaj�
 
 ---
 
-**Testy:**
-   -Test 1 sleepy zakomentowane
-   -Test 2 zabicie procesu kasjera
-   -Test 3 Usunieęcie plików FIFO w trakcie działania
-   -Test 4 Zmiana obsługi semaforów np. w ratowniku
+**Testy:**:
+   -Test 1 sleepy zakomentowane.
+   -Test 2 zabicie procesu kasjera.
+   -Test 3 Usunieęcie plików FIFO w trakcie działania.
+   -Test 4 Zmiana obsługi semaforów np. w ratowniku.
 
 ---
 ## Konfiguracja Programu
