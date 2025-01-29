@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    // Konwersja argumentow na liczby
+    // Konwersja argumentów na liczby
     POJ_OLIMPIJKA = atoi(argv[1]);
     POJ_REKREACJA = atoi(argv[2]);
     POJ_BRODZIK = atoi(argv[3]);
@@ -50,7 +50,7 @@ int main(int argc, char* argv[]) {
     signal(SIGINT, obsluga_sygnalu_kasjer);
     signal(SIGTSTP, SIG_DFL);
 
-    srand(time(NULL)); //  dla losowosci
+    srand(time(NULL)); // seed dla ewentualnych losowości
 
     printf(YELLOW " <<Kasjer>> Rozpoczeto prace kasjera. " RESET "\n");
 
@@ -107,7 +107,7 @@ int main(int argc, char* argv[]) {
 
     DaneOsoby temp;
     while (1) {
-        // czekamy na semafor 2 – klient wysyla DaneOsoby
+        // czekamy na semafor 2 – klient wysyła DaneOsoby
         opusc_semafor(sem_id, 2);
 
         memcpy(&temp, wsp_dane, sizeof(DaneOsoby));
