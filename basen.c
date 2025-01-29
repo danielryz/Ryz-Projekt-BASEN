@@ -81,6 +81,11 @@ int main(int argc, char* argv[]) {
         perror("ftok 200 - glowny");
         exit(EXIT_FAILURE);
     }
+    key_t klucz3 = ftok(".", 300);
+    if (klucz3 == -1) {
+        perror("ftok 300 - glowny");
+        exit(EXIT_FAILURE);
+    }
 
     sem_id = semget(klucz, 8, 0600 | IPC_CREAT);
     if (sem_id == -1) {
@@ -88,19 +93,19 @@ int main(int argc, char* argv[]) {
         exit(EXIT_FAILURE);
     }
     // Inicjalizacja semaforow
-    if (semctl(sem_id, 0, SETVAL, 1) == -1) { perror("semctl s0"); exit(EXIT_FAILURE); } // Ochrona pamieci wspoldzielonej z danymi klientow
-    if (semctl(sem_id, 1, SETVAL, 1) == -1) { perror("semctl s1"); exit(EXIT_FAILURE); } // Ochrona pamieci wpoldzielonej unikanie kolizji klient-kasjer
-    if (semctl(sem_id, 2, SETVAL, 0) == -1) { perror("semctl s2"); exit(EXIT_FAILURE); } // Synchronizacja komunikacji klient-kasjer obsluga
-    if (semctl(sem_id, 3, SETVAL, 0) == -1) { perror("semctl s3"); exit(EXIT_FAILURE); } // Synchronizacja komunikacji klient-kasjer zakonczenie obslugi
-    if (semctl(sem_id, 4, SETVAL, 1) == -1) { perror("semctl s4"); exit(EXIT_FAILURE); } // Blokowanie dostepu klientow podczas przerwy technicznej
-    if (semctl(sem_id, 5, SETVAL, 1) == -1) { perror("semctl s5"); exit(EXIT_FAILURE); } // Obsluga Klientow VIP
+    if (semctl(sem_id, 0, SETVAL, 1) == -1) { perror("semctl s0"); exit(EXIT_FAILURE); }
+    if (semctl(sem_id, 1, SETVAL, 1) == -1) { perror("semctl s1"); exit(EXIT_FAILURE); }
+    if (semctl(sem_id, 2, SETVAL, 0) == -1) { perror("semctl s2"); exit(EXIT_FAILURE); }
+    if (semctl(sem_id, 3, SETVAL, 0) == -1) { perror("semctl s3"); exit(EXIT_FAILURE); }
+    if (semctl(sem_id, 4, SETVAL, 1) == -1) { perror("semctl s4"); exit(EXIT_FAILURE); }
+    if (semctl(sem_id, 5, SETVAL, 1) == -1) { perror("semctl s5"); exit(EXIT_FAILURE); }
 
     // Maksymalna liczba klientów
     if (semctl(sem_id, 6, SETVAL, (POJ_OLIMPIJKA + POJ_REKREACJA + POJ_BRODZIK) * 3) == -1) {
         perror("semctl s6");
         exit(EXIT_FAILURE);
-    } // Ograniczenie maksymalnej liczby klientow w basenie
-    if (semctl(sem_id, 7, SETVAL, 1) == -1) { perror("semctl s7"); exit(EXIT_FAILURE); } // Ochrona wizualizacji satnu basenow
+    }
+    if (semctl(sem_id, 7, SETVAL, 1) == -1) { perror("semctl s7"); exit(EXIT_FAILURE); }
 
     // Kolejki komunikatów
     msq_1 = msgget(klucz, IPC_CREAT | 0600);
@@ -137,7 +142,7 @@ int main(int argc, char* argv[]) {
     *((int*)wsp_czas) = 0; // start 10:00 = 0
 
     // Segment pamięci dla BasenyData
-    shm_id_basen = shmget(klucz + 10, sizeof(BasenyData), 0600 | IPC_CREAT);
+    shm_id_basen = shmget(klucz3, sizeof(BasenyData), 0600 | IPC_CREAT);
     if (shm_id_basen == -1) {
         perror("shmget3 - basenyData");
         exit(EXIT_FAILURE);
